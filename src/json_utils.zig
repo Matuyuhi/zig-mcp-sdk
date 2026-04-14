@@ -47,3 +47,33 @@ pub fn getArray(val: ?JsonValue) ?std.json.Array {
         else => null,
     };
 }
+
+// --- Tests ---
+
+const testing = std.testing;
+
+test "getString" {
+    try testing.expectEqualStrings("hello", getString(.{ .string = "hello" }).?);
+    try testing.expect(getString(.{ .integer = 42 }) == null);
+    try testing.expect(getString(null) == null);
+}
+
+test "getNumber from integer" {
+    try testing.expectEqual(@as(f64, 42.0), getNumber(.{ .integer = 42 }).?);
+}
+
+test "getNumber from float" {
+    try testing.expectEqual(@as(f64, 3.14), getNumber(.{ .float = 3.14 }).?);
+}
+
+test "getNumber returns null for non-numeric" {
+    try testing.expect(getNumber(.{ .string = "hi" }) == null);
+    try testing.expect(getNumber(null) == null);
+}
+
+test "getBool" {
+    try testing.expectEqual(true, getBool(.{ .bool = true }).?);
+    try testing.expectEqual(false, getBool(.{ .bool = false }).?);
+    try testing.expect(getBool(.{ .integer = 1 }) == null);
+    try testing.expect(getBool(null) == null);
+}

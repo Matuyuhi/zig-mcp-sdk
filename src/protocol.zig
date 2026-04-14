@@ -111,7 +111,7 @@ pub fn buildToolResult(allocator: std.mem.Allocator, id_json: []const u8, text: 
     return try allocator.dupe(u8, list.items);
 }
 
-/// Build the initialize response
+/// Build the initialize response.
 pub fn buildInitializeResult(allocator: std.mem.Allocator, id_json: []const u8, server_name: []const u8, server_version: []const u8) ![]const u8 {
     var list: std.ArrayList(u8) = .empty;
     defer list.deinit(allocator);
@@ -126,4 +126,78 @@ pub fn buildInitializeResult(allocator: std.mem.Allocator, id_json: []const u8, 
     defer allocator.free(result_json);
 
     return try buildJsonRpcResult(allocator, id_json, result_json);
+}
+
+// --- Tests ---
+
+const testing = std.testing;
+
+test "formatId with integer" {
+    var buf: [256]u8 = undefined;
+    const result = formatId(.{ .integer = 42 }, &buf);
+    try testing.expectEqualStrings("42", result);
+}
+
+test "formatId with string" {
+    var buf: [256]u8 = undefined;
+    const result = formatId(.{ .string = "abc" }, &buf);
+    try testing.expectEqualStrings("\"abc\"", result);
+}
+
+test "formatId with null" {
+    var buf: [256]u8 = undefined;
+    try testing.expectEqualStrings("null", formatId(null, &buf));
+    try testing.expectEqualStrings("null", formatId(.null, &buf));
+}
+
+test "buildJsonRpcError" {
+    const allocator = testing.allocator;
+    const result = try buildJsonRpcError(allocator, "1", -32600, "Invalid Request");
+    defer allocator.free(result);
+    // Verify it contains the expected structure
+    try testing.expect(std.mem.indexOf(u8, result, "\"jsonrpc\":\"2.0\"") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"id\":1") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"code\":-32600") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"message\":\"Invalid Request\"") != null);
+}
+
+test "buildJsonRpcResult" {
+    const allocator = testing.allocator;
+    const result = try buildJsonRpcResult(allocator, "5", "{\"ok\":true}");
+    defer allocator.free(result);
+    try testing.expect(std.mem.indexOf(u8, result, "\"id\":5") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"result\":{\"ok\":true}") != null);
+}
+
+test "buildToolResult success" {
+    const allocator = testing.allocator;
+    const result = try buildToolResult(allocator, "3", "done", false);
+    defer allocator.free(result);
+    try testing.expect(std.mem.indexOf(u8, result, "\"isError\":false") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"text\":\"done\"") != null);
+}
+
+test "buildToolResult error" {
+    const allocator = testing.allocator;
+    const result = try buildToolResult(allocator, "3", "fail", true);
+    defer allocator.free(result);
+    try testing.expect(std.mem.indexOf(u8, result, "\"isError\":true") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"text\":\"fail\"") != null);
+}
+
+test "buildInitializeResult" {
+    const allocator = testing.allocator;
+    const result = try buildInitializeResult(allocator, "1", "test-server", "0.1.0");
+    defer allocator.free(result);
+    try testing.expect(std.mem.indexOf(u8, result, "\"protocolVersion\":\"2024-11-05\"") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"name\":\"test-server\"") != null);
+    try testing.expect(std.mem.indexOf(u8, result, "\"version\":\"0.1.0\"") != null);
+}
+
+test "appendJsonString escapes special characters" {
+    const allocator = testing.allocator;
+    var list: std.ArrayList(u8) = .empty;
+    defer list.deinit(allocator);
+    try appendJsonString(&list, allocator, "hello\n\"world\"\\");
+    try testing.expectEqualStrings("\"hello\\n\\\"world\\\"\\\\\"", list.items);
 }
