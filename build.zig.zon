@@ -1,0 +1,13 @@
+.{
+    .name = .zig_mcp_sdk,
+    .version = "0.1.0",
+    .fingerprint = 0x6d07f6b6370139ea,
+    .minimum_zig_version = "0.15.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+    },
+    .dependencies = .{},
+}
