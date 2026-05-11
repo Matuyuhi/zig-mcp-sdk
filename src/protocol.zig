@@ -201,3 +201,11 @@ test "appendJsonString escapes special characters" {
     try appendJsonString(&list, allocator, "hello\n\"world\"\\");
     try testing.expectEqualStrings("\"hello\\n\\\"world\\\"\\\\\"", list.items);
 }
+
+test "appendJsonString escapes control characters" {
+    const allocator = testing.allocator;
+    var list: std.ArrayList(u8) = .empty;
+    defer list.deinit(allocator);
+    try appendJsonString(&list, allocator, "start\x01end");
+    try testing.expectEqualStrings("\"start\\u0001end\"", list.items);
+}
