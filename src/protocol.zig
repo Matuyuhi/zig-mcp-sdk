@@ -25,37 +25,20 @@ pub fn appendJsonString(list: *std.ArrayList(u8), allocator: std.mem.Allocator, 
 }
 
 /// Convert a JSON Value representing an id to its JSON text representation.
-pub fn formatId(value: ?std.json.Value, buf: []u8) []const u8 {
-    const val = value orelse return "null";
+pub fn formatId(allocator: std.mem.Allocator, value: ?std.json.Value) ![]const u8 {
+    const val = value orelse return try allocator.dupe(u8, "null");
     switch (val) {
-        .null => return "null",
+        .null => return try allocator.dupe(u8, "null"),
         .integer => |n| {
-            return std.fmt.bufPrint(buf, "{d}", .{n}) catch "null";
+            return try std.fmt.allocPrint(allocator, "{d}", .{n});
         },
         .string => |s| {
-            var pos: usize = 0;
-            if (pos < buf.len) {
-                buf[pos] = '"';
-                pos += 1;
-            }
-            for (s) |c| {
-                if (pos >= buf.len - 1) break;
-                if (c == '"' or c == '\\') {
-                    if (pos < buf.len - 1) {
-                        buf[pos] = '\\';
-                        pos += 1;
-                    }
-                }
-                buf[pos] = c;
-                pos += 1;
-            }
-            if (pos < buf.len) {
-                buf[pos] = '"';
-                pos += 1;
-            }
-            return buf[0..pos];
+            var list: std.ArrayList(u8) = .empty;
+            defer list.deinit(allocator);
+            try appendJsonString(&list, allocator, s);
+            return try list.toOwnedSlice(allocator);
         },
-        else => return "null",
+        else => return try allocator.dupe(u8, "null"),
     }
 }
 
@@ -74,7 +57,7 @@ pub fn buildJsonRpcError(allocator: std.mem.Allocator, id_json: []const u8, code
     try appendJsonString(&list, allocator, message);
     try list.appendSlice(allocator, "}}\n");
 
-    return try allocator.dupe(u8, list.items);
+    return try list.toOwnedSlice(allocator);
 }
 
 /// Build JSON-RPC success response with a raw JSON result
@@ -88,7 +71,7 @@ pub fn buildJsonRpcResult(allocator: std.mem.Allocator, id_json: []const u8, res
     try list.appendSlice(allocator, result_json);
     try list.appendSlice(allocator, "}\n");
 
-    return try allocator.dupe(u8, list.items);
+    return try list.toOwnedSlice(allocator);
 }
 
 /// Build MCP tool result (success or error) as an allocated string
@@ -108,7 +91,7 @@ pub fn buildToolResult(allocator: std.mem.Allocator, id_json: []const u8, text: 
     }
     try list.appendSlice(allocator, "}}\n");
 
-    return try allocator.dupe(u8, list.items);
+    return try list.toOwnedSlice(allocator);
 }
 
 /// Build the initialize response.
@@ -133,21 +116,31 @@ pub fn buildInitializeResult(allocator: std.mem.Allocator, id_json: []const u8, 
 const testing = std.testing;
 
 test "formatId with integer" {
-    var buf: [256]u8 = undefined;
-    const result = formatId(.{ .integer = 42 }, &buf);
+    const result = try formatId(testing.allocator, .{ .integer = 42 });
+    defer testing.allocator.free(result);
     try testing.expectEqualStrings("42", result);
 }
 
 test "formatId with string" {
-    var buf: [256]u8 = undefined;
-    const result = formatId(.{ .string = "abc" }, &buf);
+    const result = try formatId(testing.allocator, .{ .string = "abc" });
+    defer testing.allocator.free(result);
     try testing.expectEqualStrings("\"abc\"", result);
 }
 
+test "formatId with string with special chars" {
+    const result = try formatId(testing.allocator, .{ .string = "ab\"c\\" });
+    defer testing.allocator.free(result);
+    try testing.expectEqualStrings("\"ab\\\"c\\\\\"", result);
+}
+
 test "formatId with null" {
-    var buf: [256]u8 = undefined;
-    try testing.expectEqualStrings("null", formatId(null, &buf));
-    try testing.expectEqualStrings("null", formatId(.null, &buf));
+    const result1 = try formatId(testing.allocator, null);
+    defer testing.allocator.free(result1);
+    try testing.expectEqualStrings("null", result1);
+
+    const result2 = try formatId(testing.allocator, .null);
+    defer testing.allocator.free(result2);
+    try testing.expectEqualStrings("null", result2);
 }
 
 test "buildJsonRpcError" {

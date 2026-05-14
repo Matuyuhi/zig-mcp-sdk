@@ -91,8 +91,10 @@ fn processLine(allocator: std.mem.Allocator, config: ServerConfig, line: []const
     };
 
     // Format id for response
-    var id_buf: [256]u8 = undefined;
-    const id_json = protocol.formatId(root.get("id"), &id_buf);
+    const id_json = protocol.formatId(allocator, root.get("id")) catch |err| {
+        return try protocol.buildJsonRpcError(allocator, "null", -32603, "Internal Error");
+    };
+    defer allocator.free(id_json);
 
     // Handle notifications (no response needed)
     if (std.mem.startsWith(u8, method, "notifications/")) {
