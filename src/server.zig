@@ -1,5 +1,6 @@
 const std = @import("std");
 const protocol = @import("protocol.zig");
+const json_utils = @import("json_utils.zig");
 
 /// Result returned by a tool handler.
 pub const ToolResult = struct {
@@ -73,21 +74,16 @@ fn processLine(allocator: std.mem.Allocator, config: ServerConfig, line: []const
     };
     defer parsed.deinit();
 
-    const root = switch (parsed.value) {
-        .object => |o| o,
-        else => {
-            return try protocol.buildJsonRpcError(allocator, "null", -32600, "Invalid Request");
-        },
+    const root = json_utils.getObject(parsed.value) orelse {
+        return try protocol.buildJsonRpcError(allocator, "null", -32600, "Invalid Request");
     };
 
     // Get method
-    const method = switch (root.get("method") orelse {
+    const method_val = root.get("method") orelse {
         return try protocol.buildJsonRpcError(allocator, "null", -32600, "Invalid Request: missing method");
-    }) {
-        .string => |s| s,
-        else => {
-            return try protocol.buildJsonRpcError(allocator, "null", -32600, "Invalid Request: method must be string");
-        },
+    };
+    const method = json_utils.getString(method_val) orelse {
+        return try protocol.buildJsonRpcError(allocator, "null", -32600, "Invalid Request: method must be string");
     };
 
     // Format id for response
@@ -113,31 +109,24 @@ fn processLine(allocator: std.mem.Allocator, config: ServerConfig, line: []const
 }
 
 fn handleToolsCall(allocator: std.mem.Allocator, config: ServerConfig, id_json: []const u8, params_val: ?std.json.Value) ![]const u8 {
-    const params = switch (params_val orelse {
+    const params = json_utils.getObject(params_val orelse {
         return try protocol.buildToolResult(allocator, id_json, "Error: missing params", true);
-    }) {
-        .object => |o| o,
-        else => {
-            return try protocol.buildToolResult(allocator, id_json, "Error: params must be object", true);
-        },
+    }) orelse {
+        return try protocol.buildToolResult(allocator, id_json, "Error: params must be object", true);
     };
 
-    const tool_name = switch (params.get("name") orelse {
+    const tool_name_val = params.get("name") orelse {
         return try protocol.buildToolResult(allocator, id_json, "Error: missing tool name", true);
-    }) {
-        .string => |s| s,
-        else => {
-            return try protocol.buildToolResult(allocator, id_json, "Error: tool name must be string", true);
-        },
+    };
+    const tool_name = json_utils.getString(tool_name_val) orelse {
+        return try protocol.buildToolResult(allocator, id_json, "Error: tool name must be string", true);
     };
 
-    const arguments = switch (params.get("arguments") orelse {
+    const arguments_val = params.get("arguments") orelse {
         return try protocol.buildToolResult(allocator, id_json, "Error: missing arguments", true);
-    }) {
-        .object => |o| o,
-        else => {
-            return try protocol.buildToolResult(allocator, id_json, "Error: arguments must be object", true);
-        },
+    };
+    const arguments = json_utils.getObject(arguments_val) orelse {
+        return try protocol.buildToolResult(allocator, id_json, "Error: arguments must be object", true);
     };
 
     std.debug.print("{s}: executing tool: {s}\n", .{ config.name, tool_name });
